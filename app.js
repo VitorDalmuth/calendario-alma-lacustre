@@ -165,7 +165,7 @@ document.head.appendChild(spinStyle);
 
 // ─── NAVIGATION ──────────────────────────────────────────────────
 
-async function openClient(client) {
+function openClient(client) {
   currentClient = client;
   const b = BRANDS[client];
   document.getElementById('cal-title').textContent = b.name;
@@ -183,8 +183,8 @@ async function openClient(client) {
   `;
   calBody.scrollTop = 0;
 
-  await loadClientPosts(client);
-  renderCalendar(client);
+  loadClientPosts(client).then(() => renderCalendar(client));
+
 }
 
 function goHome() {
@@ -193,17 +193,18 @@ function goHome() {
   currentClient = null;
 }
 
-async function refreshCalendar() {
+function refreshCalendar() {
   if (!currentClient) return;
   const btn = document.getElementById('refresh-btn');
   const icon = btn.querySelector('i');
   icon.style.animation = 'spin 0.8s linear infinite';
   btn.disabled = true;
-  await loadClientPosts(currentClient);
-  renderCalendar(currentClient);
-  icon.style.animation = '';
-  btn.disabled = false;
-  showToast('Calendário atualizado!', 'success');
+  loadClientPosts(currentClient).then(() => {
+    renderCalendar(currentClient);
+    icon.style.animation = '';
+    btn.disabled = false;
+    showToast('Calendário atualizado!', 'success');
+  });
 }
 
 document.addEventListener('keydown', (e) => {
