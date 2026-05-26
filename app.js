@@ -7,108 +7,99 @@
 
 // ─── SUPABASE CONFIG ─────────────────────────────────────────────
 
-const SUPABASE_URL  = 'https://ivvuamutykifzcidomeb.supabase.co';
-const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2dnVhbXV0eWtpZnpjaWRvbWViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDcyNTMsImV4cCI6MjA5NTMyMzI1M30.5ho_3oKhWVt_lHdS0zZThdZAQPD3H2mm8hhx6DV_AEM';
+const SUPABASE_URL = 'https://ivvuamutykifzcidomeb.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2dnVhbXV0eWtpZnpjaWRvbWViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDcyNTMsImV4cCI6MjA5NTMyMzI1M30.5ho_3oKhWVt_lHdS0zZThdZAQPD3H2mm8hhx6DV_AEM';
 
-const headers = {
+const SB_HEADERS = {
   'apikey': SUPABASE_KEY,
   'Authorization': 'Bearer ' + SUPABASE_KEY,
   'Content-Type': 'application/json',
   'Prefer': 'return=representation'
 };
 
+// Limpa qualquer localStorage antigo na inicialização
+try { localStorage.removeItem('editorial_posts_v1'); } catch(e) {}
+
+// Desregistra service workers antigos
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
+}
+
 async function sbFetch(path, options = {}) {
   const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    cache: 'no-store',
     ...options,
-    headers: { ...headers, ...(options.headers || {}) }
+    headers: { ...SB_HEADERS, ...(options.headers || {}) }
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err);
-  }
+  if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
   return text ? JSON.parse(text) : [];
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────────
 
-const MONTHS = [
-  'Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'
-];
+const MONTHS       = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const WEEKDAYS_FULL = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
-const DAYS_SHORT    = ['D','S','T','Q','Q','S','S'];
-const FORMATS       = ['Feed', 'Stories', 'Reels', 'Carrossel'];
+const DAYS_SHORT   = ['D','S','T','Q','Q','S','S'];
+const FORMATS      = ['Feed','Stories','Reels','Carrossel'];
 
 const BRANDS = {
-  lacustre: { name: 'Lacustre Hall',     color: '#C8A97E', light: '#F5EFE6', dark: '#8B6E4E' },
-  alma:     { name: 'Alma Gastronomia',  color: '#D4687A', light: '#FAEDEF', dark: '#9A3B4A' }
+  lacustre: { name: 'Lacustre Hall',    color: '#C8A97E', light: '#F5EFE6', dark: '#8B6E4E' },
+  alma:     { name: 'Alma Gastronomia', color: '#D4687A', light: '#FAEDEF', dark: '#9A3B4A' }
 };
 
 // ─── STATE ───────────────────────────────────────────────────────
 
 let currentClient = null;
 let currentDayKey = null;
-// Cache: key = "client_y_m_d" → array of post objects
 let cache = {};
 
 // ─── DATA LAYER ──────────────────────────────────────────────────
 
-function cacheKey(client, y, m, d) {
-  return `${client}_${y}_${m}_${d}`;
-}
+function cacheKey(client, y, m, d) { return `${client}_${y}_${m}_${d}`; }
 
-async function loadClientPosts(client) {
-  showLoadingBar(true);
-  try {
-    const rows = await sbFetch(
-      `posts?client=eq.${client}&order=created_at.asc&select=*`
-    );
-    // Clear cache for this client
-    Object.keys(cache).forEach(k => { if (k.startsWith(client + '_')) delete cache[k]; });
-    rows.forEach(row => {
-      const k = cacheKey(row.client, row.year, row.month, row.day);
-      if (!cache[k]) cache[k] = [];
-      cache[k].push({ id: row.id, format: row.format, content: row.content });
+function getCached(client, y, m, d) { return cache[cacheKey(client, y, m, d)] || []; }
+
+function loadClientPosts(client) {
+  return sbFetch(`posts?client=eq.${client}&order=created_at.asc&select=*`)
+    .then(rows => {
+      // Limpa cache deste cliente
+      Object.keys(cache).forEach(k => { if (k.startsWith(client + '_')) delete cache[k]; });
+      rows.forEach(row => {
+        const k = cacheKey(row.client, row.year, row.month, row.day);
+        if (!cache[k]) cache[k] = [];
+        cache[k].push({ id: row.id, format: row.format, content: row.content });
+      });
+    })
+    .catch(e => {
+      console.error('Erro ao carregar:', e);
+      showToast('Erro ao carregar. Verifique a conexão.', 'error');
     });
-  } catch (e) {
-    showToast('Erro ao carregar posts. Verifique a conexão.', 'error');
-    console.error(e);
-  } finally {
-    showLoadingBar(false);
-  }
 }
 
-function getCached(client, y, m, d) {
-  return cache[cacheKey(client, y, m, d)] || [];
-}
-
-async function saveDay(client, y, m, d, editPosts) {
-  // editPosts = [{id?, format, content}, ...]
-  // 1. Delete all existing rows for this day
-  await sbFetch(
+function saveDay(client, y, m, d, editPosts) {
+  // Deleta registros existentes do dia
+  return sbFetch(
     `posts?client=eq.${client}&year=eq.${y}&month=eq.${m}&day=eq.${d}`,
-    { method: 'DELETE', headers: { ...headers, 'Prefer': '' } }
-  );
-
-  // 2. Insert new rows
-  if (editPosts.length > 0) {
+    { method: 'DELETE', headers: { ...SB_HEADERS, 'Prefer': '' } }
+  ).then(() => {
+    if (editPosts.length === 0) {
+      cache[cacheKey(client, y, m, d)] = [];
+      return;
+    }
     const rows = editPosts.map(p => ({
       client, year: y, month: m, day: d,
-      format: p.format,
-      content: p.content || ''
+      format: p.format, content: p.content || ''
     }));
-    const inserted = await sbFetch('posts', {
-      method: 'POST',
-      body: JSON.stringify(rows)
-    });
-    // Update cache
-    cache[cacheKey(client, y, m, d)] = inserted.map(r => ({
-      id: r.id, format: r.format, content: r.content
-    }));
-  } else {
-    cache[cacheKey(client, y, m, d)] = [];
-  }
+    return sbFetch('posts', { method: 'POST', body: JSON.stringify(rows) })
+      .then(inserted => {
+        cache[cacheKey(client, y, m, d)] = inserted.map(r => ({
+          id: r.id, format: r.format, content: r.content
+        }));
+      });
+  });
 }
 
 // ─── UI HELPERS ──────────────────────────────────────────────────
@@ -118,50 +109,23 @@ function showLoadingBar(visible) {
   if (!bar) {
     bar = document.createElement('div');
     bar.id = 'loading-bar';
-    bar.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 999;
-      background: linear-gradient(90deg, #C8A97E, #D4687A);
-      transform-origin: left; transition: opacity 0.3s;
-    `;
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:3px;z-index:999;background:linear-gradient(90deg,#C8A97E,#D4687A);transition:opacity 0.3s;';
     document.body.appendChild(bar);
   }
   bar.style.opacity = visible ? '1' : '0';
 }
 
-function showToast(msg, type = 'info') {
+function showToast(msg, type) {
   const existing = document.getElementById('toast');
   if (existing) existing.remove();
-
   const toast = document.createElement('div');
   toast.id = 'toast';
   const bg = type === 'error' ? '#C0392B' : type === 'success' ? '#3B6D11' : '#1A1714';
-  toast.style.cssText = `
-    position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
-    background: ${bg}; color: white; font-family: 'DM Sans', sans-serif;
-    font-size: 13px; padding: 10px 18px; border-radius: 20px; z-index: 999;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2); white-space: nowrap;
-    animation: fadeIn 0.2s ease;
-  `;
+  toast.style.cssText = `position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:${bg};color:white;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 18px;border-radius:20px;z-index:999;white-space:nowrap;`;
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
-
-function setButtonLoading(btn, loading) {
-  if (loading) {
-    btn.dataset.originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.8s linear infinite" aria-hidden="true"></i>';
-    btn.disabled = true;
-  } else {
-    btn.innerHTML = btn.dataset.originalText || btn.innerHTML;
-    btn.disabled = false;
-  }
-}
-
-// Add spin animation
-const spinStyle = document.createElement('style');
-spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-document.head.appendChild(spinStyle);
 
 // ─── NAVIGATION ──────────────────────────────────────────────────
 
@@ -173,18 +137,15 @@ function openClient(client) {
   document.getElementById('screen-home').classList.remove('active');
   document.getElementById('screen-cal').classList.add('active');
 
-  // Show loading skeleton while fetching from Supabase
   const calBody = document.getElementById('cal-body');
-  calBody.innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;gap:1rem;color:var(--muted);">
-      <i class="ti ti-loader-2" style="font-size:32px;animation:spin 0.8s linear infinite;" aria-hidden="true"></i>
-      <span style="font-size:14px;">Carregando postagens…</span>
-    </div>
-  `;
   calBody.scrollTop = 0;
+  calBody.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;gap:1rem;color:var(--muted);"><i class="ti ti-loader-2" style="font-size:32px;animation:spin 0.8s linear infinite;" aria-hidden="true"></i><span style="font-size:14px;">Carregando postagens…</span></div>';
 
-  loadClientPosts(client).then(() => renderCalendar(client));
-
+  showLoadingBar(true);
+  loadClientPosts(client).then(() => {
+    showLoadingBar(false);
+    renderCalendar(client);
+  });
 }
 
 function goHome() {
@@ -196,39 +157,38 @@ function goHome() {
 function refreshCalendar() {
   if (!currentClient) return;
   const btn = document.getElementById('refresh-btn');
-  const icon = btn.querySelector('i');
-  icon.style.animation = 'spin 0.8s linear infinite';
-  btn.disabled = true;
+  const icon = btn ? btn.querySelector('i') : null;
+  if (icon) icon.style.animation = 'spin 0.8s linear infinite';
+  if (btn) btn.disabled = true;
+
+  showLoadingBar(true);
   loadClientPosts(currentClient).then(() => {
+    showLoadingBar(false);
     renderCalendar(currentClient);
-    icon.style.animation = '';
-    btn.disabled = false;
+    if (icon) icon.style.animation = '';
+    if (btn) btn.disabled = false;
     showToast('Calendário atualizado!', 'success');
   });
 }
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeModal();
-});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ─── CALENDAR RENDERING ──────────────────────────────────────────
 
 function renderCalendar(client) {
-  const body = document.getElementById('cal-body');
-  body.innerHTML = '';
+  const body     = document.getElementById('cal-body');
+  const now      = new Date();
+  const fragment = document.createDocumentFragment();
 
-  const now        = new Date();
-  const startYear  = now.getFullYear();
-  const startMonth = now.getMonth();
-  const fragment   = document.createDocumentFragment();
-
-  for (let y = startYear; y <= 2026; y++) {
-    const mStart = (y === startYear) ? startMonth : 0;
-    const mEnd   = (y === 2026) ? 11 : 11;
-    for (let m = mStart; m <= mEnd; m++) {
+  for (let y = now.getFullYear(); y <= 2026; y++) {
+    const mStart = (y === now.getFullYear()) ? now.getMonth() : 0;
+    for (let m = mStart; m <= 11; m++) {
+      if (y === 2026 && m > 11) break;
       fragment.appendChild(renderMonth(client, y, m, now));
     }
   }
+
+  body.innerHTML = '';
   body.appendChild(fragment);
 }
 
@@ -252,9 +212,8 @@ function renderMonth(client, y, m, now) {
   });
   block.appendChild(wdRow);
 
-  const grid = document.createElement('div');
-  grid.className = 'days-grid';
-
+  const grid        = document.createElement('div');
+  grid.className    = 'days-grid';
   const firstDay    = new Date(y, m, 1).getDay();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const todayStr    = now.toDateString();
@@ -281,9 +240,8 @@ function renderMonth(client, y, m, now) {
     if (!isPast) {
       cell.setAttribute('tabindex', '0');
       cell.setAttribute('role', 'button');
-      cell.setAttribute('aria-label', `${d} de ${MONTHS[m]}, ${dayPosts.length} postagens`);
       cell.addEventListener('click', () => openDay(client, y, m, d));
-      cell.addEventListener('keydown', (e) => {
+      cell.addEventListener('keydown', e => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(client, y, m, d); }
       });
     }
@@ -327,12 +285,8 @@ function openDay(client, y, m, d) {
   currentDayKey = { client, y, m, d };
   const dateObj = new Date(y, m, d);
   const b = BRANDS[client];
-
-  document.getElementById('modal-date-label').textContent =
-    `${b.name} · ${MONTHS[m]} ${y}`;
-  document.getElementById('modal-title-el').textContent =
-    `${WEEKDAYS_FULL[dateObj.getDay()]}, ${d} de ${MONTHS[m]}`;
-
+  document.getElementById('modal-date-label').textContent = `${b.name} · ${MONTHS[m]} ${y}`;
+  document.getElementById('modal-title-el').textContent   = `${WEEKDAYS_FULL[dateObj.getDay()]}, ${d} de ${MONTHS[m]}`;
   renderModalView();
   document.getElementById('modal').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -450,7 +404,6 @@ function renderModalEdit() {
       header.appendChild(removeBtn);
       block.appendChild(header);
 
-      // Format
       const fmtGroup = document.createElement('div');
       fmtGroup.className = 'form-group';
       const fmtLabel = document.createElement('label');
@@ -469,7 +422,6 @@ function renderModalEdit() {
       fmtGroup.appendChild(fmtSelect);
       block.appendChild(fmtGroup);
 
-      // Content
       const ctGroup = document.createElement('div');
       ctGroup.className = 'form-group';
       const ctLabel = document.createElement('label');
@@ -509,20 +461,21 @@ function renderModalEdit() {
   saveBtn.style.background = b.color;
   saveBtn.type = 'button';
   saveBtn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Salvar';
-  saveBtn.onclick = async () => {
+  saveBtn.onclick = () => {
     const valid = editPosts.filter(p => p.format);
-    setButtonLoading(saveBtn, true);
-    try {
-      await saveDay(client, y, m, d, valid);
-      renderCalendar(client);
-      renderModalView();
-      showToast('Postagens salvas!', 'success');
-    } catch (e) {
-      showToast('Erro ao salvar. Tente novamente.', 'error');
-      console.error(e);
-    } finally {
-      setButtonLoading(saveBtn, false);
-    }
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 0.8s linear infinite"></i>';
+    saveDay(client, y, m, d, valid)
+      .then(() => {
+        renderCalendar(client);
+        renderModalView();
+        showToast('Postagens salvas!', 'success');
+      })
+      .catch(() => {
+        showToast('Erro ao salvar. Tente novamente.', 'error');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="ti ti-check" aria-hidden="true"></i> Salvar';
+      });
   };
 
   const cancelBtn = document.createElement('button');
@@ -542,6 +495,10 @@ function escapeHtml(str) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
+
+const spinStyle = document.createElement('style');
+spinStyle.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(spinStyle);
 
 // ─── EXPOSE GLOBALS ──────────────────────────────────────────────
 
