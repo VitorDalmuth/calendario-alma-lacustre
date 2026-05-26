@@ -172,8 +172,16 @@ async function openClient(client) {
   document.getElementById('cal-dot').style.background = b.color;
   document.getElementById('screen-home').classList.remove('active');
   document.getElementById('screen-cal').classList.add('active');
-  document.getElementById('cal-body').innerHTML = '';
-  document.getElementById('cal-body').scrollTop = 0;
+
+  // Show loading skeleton while fetching from Supabase
+  const calBody = document.getElementById('cal-body');
+  calBody.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;gap:1rem;color:var(--muted);">
+      <i class="ti ti-loader-2" style="font-size:32px;animation:spin 0.8s linear infinite;" aria-hidden="true"></i>
+      <span style="font-size:14px;">Carregando postagens…</span>
+    </div>
+  `;
+  calBody.scrollTop = 0;
 
   await loadClientPosts(client);
   renderCalendar(client);
@@ -183,6 +191,19 @@ function goHome() {
   document.getElementById('screen-cal').classList.remove('active');
   document.getElementById('screen-home').classList.add('active');
   currentClient = null;
+}
+
+async function refreshCalendar() {
+  if (!currentClient) return;
+  const btn = document.getElementById('refresh-btn');
+  const icon = btn.querySelector('i');
+  icon.style.animation = 'spin 0.8s linear infinite';
+  btn.disabled = true;
+  await loadClientPosts(currentClient);
+  renderCalendar(currentClient);
+  icon.style.animation = '';
+  btn.disabled = false;
+  showToast('Calendário atualizado!', 'success');
 }
 
 document.addEventListener('keydown', (e) => {
@@ -523,5 +544,6 @@ function escapeHtml(str) {
 
 // ─── EXPOSE GLOBALS ──────────────────────────────────────────────
 
-window.openClient = openClient;
-window.goHome     = goHome;
+window.openClient      = openClient;
+window.goHome          = goHome;
+window.refreshCalendar = refreshCalendar;
