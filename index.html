@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Calendário Editorial</title>
+  <meta name="description" content="Gestão de postagens para redes sociais" />
+  <meta name="theme-color" content="#F8F6F2" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HOME SCREEN -->
+  <div id="screen-home" class="screen active">
+    <div class="home-header">
+      <p class="eyebrow">Gestão de Conteúdo</p>
+      <h1>Calendário<br>Editorial</h1>
+      <p class="home-sub">Selecione o cliente para visualizar</p>
+    </div>
+    <div class="client-cards">
+      <div class="client-card lacustre" onclick="openClient('lacustre')" role="button" tabindex="0">
+        <span class="tag">Eventos &amp; Espaço</span>
+        <h2>Lacustre Hall</h2>
+        <p>Calendário de postagens 2026</p>
+        <span class="arrow"><i class="ti ti-chevron-right" aria-hidden="true"></i></span>
+      </div>
+      <div class="client-card alma" onclick="openClient('alma')" role="button" tabindex="0">
+        <span class="tag">Gastronomia</span>
+        <h2>Alma Gastronomia</h2>
+        <p>Calendário de postagens 2026</p>
+        <span class="arrow"><i class="ti ti-chevron-right" aria-hidden="true"></i></span>
+      </div>
+    </div>
+    <div class="home-footer">
+      <p>Social mídia · Gestão editorial</p>
+    </div>
+  </div>
+
+  <!-- CALENDAR SCREEN -->
+  <div id="screen-cal" class="screen">
+    <div class="cal-header" id="cal-header">
+      <button class="back-btn" onclick="goHome()" aria-label="Voltar">
+        <i class="ti ti-arrow-left" aria-hidden="true"></i>
+      </button>
+      <div class="cal-header-info">
+        <div class="sub" id="cal-sub">Calendário 2026</div>
+        <h2 id="cal-title">—</h2>
+      </div>
+      <div class="cal-brand-dot" id="cal-dot"></div>
+    </div>
+    <div class="cal-body" id="cal-body"></div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-sheet" id="modal-sheet">
+    <div class="modal-handle" aria-hidden="true"></div>
+    <div class="modal-header">
+      <div class="modal-date-tag" id="modal-date-label"></div>
+      <div class="modal-title" id="modal-title-el"></div>
+    </div>
+    <div id="modal-content"></div>
+    <div class="modal-actions" id="modal-actions"></div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
